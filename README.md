@@ -146,6 +146,22 @@ result = debate.run(num_rounds=config.num_rounds)
 - **Context Window Limits**: Long debates may be constrained by the token limits of the selected models.
 - **Fixed Roles**: The current version is designed for a four-participant structure (1 Organizer, 2 Debaters, 1 Judge).
 
+## Project Analysis vs. Current Research
+
+Based on the research cited in the References section, the platform's implementation aligns with several established findings while maintaining specific architectural gaps.
+
+### Alignment with Research
+- **Multi-Round Convergence**: Following *Du et al. (2024)*, the platform uses a multi-round debate structure to reduce hallucinations and improve reasoning through iterative critiquing.
+- **Strategic Adaptation**: In line with *Zhu et al. (2025)*, the use of intermediate scoring allows for strategic pivots, enabling models to adapt their argumentation based on "milestone-based" feedback.
+- **Novelty Enforcement**: The **Early Termination** logic addresses the "stall" effect noted in *Duckworth et al. (2024)*, where multi-agent debates often become repetitive after initial rounds.
+- **Adversarial Persona Constraints**: By enforcing strict "Supporter" vs. "Opposer" roles, the system minimizes the "consensus bias" identified in *Wu et al. (2025)*.
+
+### Current Gaps and Limitations
+- **Fine-Grained Logic Validation**: Current evaluation is performed on the entire argument. Research by *Zhang & Xiong (2025)* suggests that step-wise (paragraph-by-paragraph) validation is more effective for complex reasoning.
+- **Group Dynamics**: The platform is restricted to one agent per side. It cannot currently simulate "majority pressure" or "peer correction" within a team, as explored in *Wu et al. (2025)*.
+- **Baseline Benchmarking**: The system lacks an automated "control group" comparison (e.g., comparing debate results vs. single-agent self-consistency) as recommended by *Duckworth et al. (2024)*.
+- **Concurrency**: The orchestration is synchronous. To scale to the "larger societies" discussed in research, the architecture would require transition to an asynchronous execution model.
+
 ## Documentation
 
 - **[Quick Start](docs/QUICKSTART.md)**
