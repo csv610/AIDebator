@@ -36,13 +36,13 @@ Participants can be configured with different LLM models.
 
 ## Why Debating Can Help LLMs?
 
-Debating provides an adversarial environment that requires models to analyze, refute, and adapt to external logic.
+Debating provides an adversarial environment to evaluate reasoning capabilities, identify subtle nuances, and detect differences in how models process information and construct arguments. It requires models to analyze, refute, and adapt to external logic.
 
 ### (1) Between Two Different Models
-Debating between models from different providers (e.g., GPT-4 vs. Claude-3) allows for the identification of provider-specific biases and knowledge gaps. It serves as a cross-validation mechanism where the strengths of one architecture can be used to expose the logical inconsistencies or factual errors of another.
+Debating between models from different providers (e.g., GPT-4 vs. Claude-3) allows for the identification of provider-specific biases and knowledge gaps. It serves as a cross-validation mechanism where the strengths of one architecture can be used to expose the logical inconsistencies or factual errors of another, highlighting subtle differences in their training and refinement.
 
 ### (2) Between the Same Models
-Assigning different roles (Supporter vs. Opposer) to the same model facilitates internal consistency testing. This configuration requires the model to explore conflicting perspectives within its own training data, which can be used to evaluate its ability to follow complex personas and identify self-contradictions in its reasoning processes.
+Assigning different roles (Supporter vs. Opposer) to the same model facilitates internal consistency testing. This configuration requires the model to explore conflicting perspectives within its own training data, which can be used to evaluate its ability to follow complex personas and identify self-contradictions in its reasoning processes, revealing how it handles nuances within a single knowledge base.
 
 ### Debate Flow
 
