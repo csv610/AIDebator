@@ -10,51 +10,77 @@ The AI Debate Platform is a modular, scalable system for orchestrating multi-par
 
 ## Architecture Diagram
 
+### Mermaid Visualization
+
+```mermaid
+graph TD
+    subgraph UI_Layer [User Interface]
+        App[app.py - Streamlit UI]
+        CLI[debate_cli.py - CLI]
+    end
+
+    subgraph Core_Engine [Core Engine]
+        Session[DebateSession]
+        
+        subgraph Participants
+            Base[Participant - ABC]
+            Org[Organizer]
+            Deb[Debater]
+            Jdg[Judge]
+            
+            Base --> Org
+            Base --> Deb
+            Base --> Jdg
+        end
+        
+        subgraph Models
+            Config[DebateConfig]
+            Arg[Argument]
+            Score[Score]
+            Term[DebateTermination]
+            Result[DebateResult]
+        end
+    end
+
+    subgraph External
+        LiteLLM[litellm]
+    end
+
+    %% Relationships
+    App --> Config
+    App --> Session
+    CLI --> Config
+    CLI --> Session
+    
+    Session --> Org
+    Session --> Deb
+    Session --> Jdg
+    Session --> Arg
+    Session --> Score
+    Session --> Term
+    Session --> Result
+    
+    Base --> LiteLLM
+
+    %% Flow
+    Start(Start Debate) --> SessionRun[Session.run]
+    SessionRun --> OrgRound[Organizer Round]
+    OrgRound --> LoopStart{Round Loop}
+    LoopStart --> IntermediateScores[Judge Intermediate Scoring]
+    IntermediateScores --> DebaterTurn[Debater Turn]
+    DebaterTurn --> Val{Quality Validation}
+    Val -- Fail --> Terminate[Early Termination]
+    Val -- Pass --> NextDebater[Opponent Turn]
+    NextDebater --> LoopEnd{More Rounds?}
+    LoopEnd -- Yes --> LoopStart
+    LoopEnd -- No --> FinalJudge[Final Judge Evaluation]
+    FinalJudge --> WinDet[Determine Winner]
+    WinDet --> End(Generate DebateResult)
+    Terminate --> FinalJudge
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Streamlit UI (app.py)                     │
-│  - Configuration input                                        │
-│  - Result visualization                                       │
-│  - Download functionality                                     │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│           Debate Engine (topic_debate.py)                    │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ Participants (Abstract Base)                         │   │
-│  │  - Participant (ABC)                                 │   │
-│  │    ├── Organizer                                     │   │
-│  │    ├── Debater                                       │   │
-│  │    └── Judge                                         │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ Data Models                                          │   │
-│  │  - Argument                                          │   │
-│  │  - Score                                             │   │
-│  │  - DebateResult                                      │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ Orchestration                                        │   │
-│  │  - DebateSession (main controller)                   │   │
-│  │    ├── run()                                         │   │
-│  │    ├── _run_organizer_round()                        │   │
-│  │    ├── _run_debate_round()                           │   │
-│  │    ├── _run_judge_evaluation()                       │   │
-│  │    └── _determine_winner()                           │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-        ┌────────────────────────────────┐
-        │  litellm (LLM abstraction)      │
-        │  Supports: OpenAI, Claude,      │
-        │  Ollama, Google, etc.           │
-        └────────────────────────────────┘
-```
+
+### Component Overview
+
 
 ## Core Components
 
