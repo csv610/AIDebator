@@ -172,3 +172,19 @@ CSV610. (2025). AI Debate Platform: Multi-Participant AI Debate
 with Quality Control and Evidence-Based Scoring.
 https://github.com/csv610/AIDebator
 ```
+
+## Reference Research Papers
+
+### Foundational & Performance Research
+- **Du, Y., Li, S., Torralba, A., Tenenbaum, J. B., & Mordatch, I. (2024).** *Improving Factuality and Reasoning in Language Models through Multiagent Debate.* Proceedings of the 41st International Conference on Machine Learning (ICML), PMLR 235. [arXiv:2305.14325](https://arxiv.org/abs/2305.14325)
+- **Smit, A., Duckworth, P., Grinsztajn, N., Barrett, T. D., & Pretorius, A. (2024).** *Should we be going MAD? A Look at Multi-Agent Debate Strategies for LLMs.* Proceedings of the 41st International Conference on Machine Learning (ICML), PMLR 235:45883-45905. [arXiv:2311.17371](https://arxiv.org/abs/2311.17371)
+
+### Logic & Mathematical Reasoning
+- **Wu, H., Li, Z., & Li, L. (2025).** *Can LLM agents really debate? A controlled study of multi-agent debate in logical reasoning.* arXiv preprint arXiv:2511.07784. [https://arxiv.org/abs/2511.07784](https://arxiv.org/abs/2511.07784)
+- **Zhang, S., & Xiong, D. (2025).** *Debate4MATH: Multi-Agent Debate for Fine-Grained Reasoning in Math.* Findings of the Association for Computational Linguistics: ACL 2025, pages 16810–16824. [https://aclanthology.org/2025.findings-acl.862/](https://aclanthology.org/2025.findings-acl.862/)
+
+### Benchmarks & System Evaluation
+- **Zhu, K., Du, H., Hong, Z., Yang, X., Guo, S., Wang, Z., Wang, Z., Qian, C., Tang, R., Ji, H., & You, J. (2025).** *MultiAgentBench: Evaluating the Collaboration and Competition of LLM agents.* Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 8580–8622. [https://aclanthology.org/2025.acl-long.421](https://aclanthology.org/2025.acl-long.421)
+
+### Safety & Security
+- **Lin, D., Shen, G., Yang, Z., Liu, T., Zhao, D., & Zeng, Y. (2025).** *Efficient LLM Safety Evaluation through Multi-Agent Debate.* arXiv preprint arXiv:2511.06396. [https://arxiv.org/abs/2511.06396](https://arxiv.org/abs/2511.06396)
