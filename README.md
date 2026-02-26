@@ -4,6 +4,75 @@ An **advanced, production-ready AI debate platform** that orchestrates academic 
 
 ## Architecture
 
+### Visual Overview
+
+```mermaid
+graph TD
+    subgraph UI_Layer [User Interface]
+        App[app.py - Streamlit UI]
+        CLI[debate_cli.py - CLI]
+    end
+
+    subgraph Core_Engine [Core Engine]
+        Session[DebateSession]
+        
+        subgraph Participants
+            Base[Participant - ABC]
+            Org[Organizer]
+            Deb[Debater]
+            Jdg[Judge]
+            
+            Base --> Org
+            Base --> Deb
+            Base --> Jdg
+        end
+        
+        subgraph Models
+            Config[DebateConfig]
+            Arg[Argument]
+            Score[Score]
+            Term[DebateTermination]
+            Result[DebateResult]
+        end
+    end
+
+    subgraph External
+        LiteLLM[litellm]
+    end
+
+    %% Relationships
+    App --> Config
+    App --> Session
+    CLI --> Config
+    CLI --> Session
+    
+    Session --> Org
+    Session --> Deb
+    Session --> Jdg
+    Session --> Arg
+    Session --> Score
+    Session --> Term
+    Session --> Result
+    
+    Base --> LiteLLM
+
+    %% Flow
+    Start(Start Debate) --> SessionRun[Session.run]
+    SessionRun --> OrgRound[Organizer Round]
+    OrgRound --> LoopStart{Round Loop}
+    LoopStart --> IntermediateScores[Judge Intermediate Scoring]
+    IntermediateScores --> DebaterTurn[Debater Turn]
+    DebaterTurn --> Val{Quality Validation}
+    Val -- Fail --> Terminate[Early Termination]
+    Val -- Pass --> NextDebater[Opponent Turn]
+    NextDebater --> LoopEnd{More Rounds?}
+    LoopEnd -- Yes --> LoopStart
+    LoopEnd -- No --> FinalJudge[Final Judge Evaluation]
+    FinalJudge --> WinDet[Determine Winner]
+    WinDet --> End(Generate DebateResult)
+    Terminate --> FinalJudge
+```
+
 ### Four Participants
 
 1. **Organizer**: Provides a neutral 200-300 word overview of the topic without favoring any side
