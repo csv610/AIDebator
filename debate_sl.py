@@ -7,29 +7,24 @@ to configure and run debates with different LLM models.
 The core debate logic is imported from src.debate module.
 """
 
-import streamlit as st
-from src.debate import (
-    Organizer,
-    Debater,
-    Judge,
-    DebateSession,
-    DebateResult,
-    DebateConfig
-)
+import asyncio
 from datetime import datetime
+
+import streamlit as st
+from dotenv import load_dotenv
+
+from src.debate import DebateConfig, DebateResult, DebateSession
+
+load_dotenv()
 
 # ============================================================================
 # PAGE CONFIGURATION
 # ============================================================================
 
-st.set_page_config(
-    page_title="AI Debate Platform",
-    page_icon="🎭",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="AI Debate Platform", page_icon="🎭", layout="wide", initial_sidebar_state="expanded")
 
-st.markdown("""
+st.markdown(
+    """
 <style>
     .main {
         padding-top: 2rem;
@@ -40,12 +35,15 @@ st.markdown("""
         margin-bottom: 1rem;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ============================================================================
 # UI FUNCTIONS
 # ============================================================================
+
 
 def display_argument(argument) -> None:
     """Display a single argument."""
@@ -109,17 +107,94 @@ def display_score(score) -> None:
         st.write(score.feedback)
 
 
+def display_baseline(baseline) -> None:
+    """Display single-agent baseline."""
+    with st.expander("🧪 **Control Group: Single-Agent Baseline Analysis**", expanded=False):
+        st.write(baseline.content)
+        st.divider()
+        st.subheader("📊 Baseline Score Breakdown")
+
+        # Main metrics
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.metric("Argument Quality", f"{baseline.score.argument_quality:.1f}")
+        with col2:
+            st.metric("Evidence Quality", f"{baseline.score.evidence_quality:.1f}")
+        with col3:
+            st.metric("Logical Consistency", f"{baseline.score.logical_consistency:.1f}")
+        with col4:
+            st.metric("Responsiveness", f"{baseline.score.responsiveness_to_gaps:.1f}")
+        with col5:
+            st.metric("Overall Score", f"{baseline.score.overall_score:.1f}")
+
+        st.write("**Baseline Feedback:**")
+        st.write(baseline.score.feedback)
+
+
+def display_scientific_impact(result: DebateResult) -> None:
+    """Display comparison between baseline and debate."""
+    if not result.baseline:
+        return
+
+    st.header("📈 Scientific Impact Analysis")
+
+    # Calculate deltas
+    best_debate_score = max([s.overall_score for s in result.scores])
+    baseline_score = result.baseline.score.overall_score
+    reasoning_delta = best_debate_score - baseline_score
+
+    total_debate_facts = sum([s.fact_count for s in result.scores])
+    baseline_facts = result.baseline.score.fact_count
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric(
+            "Reasoning Improvement",
+            f"{best_debate_score:.1f}/10",
+            delta=f"{reasoning_delta:+.1f} points",
+            help="Comparing the highest debate score vs. the single-agent baseline score.",
+        )
+
+    with col2:
+        if baseline_facts > 0:
+            fact_increase = ((total_debate_facts - baseline_facts) / baseline_facts) * 100
+            st.metric(
+                "Evidence Density",
+                f"{total_debate_facts} facts",
+                delta=f"{fact_increase:+.1f}%",
+                help="Comparison of total citations/facts found in debate vs. baseline.",
+            )
+        else:
+            st.metric("Evidence Density", f"{total_debate_facts} facts", delta="N/A")
+
+    if reasoning_delta > 0:
+        st.success(
+            f"🔍 **Verdict**: The multi-agent debate structure improved reasoning by **{reasoning_delta:+.1f} points** over a single-agent response."
+        )
+    else:
+        st.warning(
+            "🔍 **Verdict**: The multi-agent debate did not yield a higher reasoning score than the single-agent baseline for this specific topic."
+        )
+
+
 def display_debate_result(result: DebateResult) -> None:
     """Display complete debate result."""
     st.header("📊 Debate Result")
 
-    # Winner announcement
+    # 1. Scientific Impact Analysis (Control Group Comparison)
+    if result.baseline:
+        display_scientific_impact(result)
+        st.divider()
+
+    # 2. Winner announcement
     if result.winner:
         winner_score = [s.overall_score for s in result.scores if s.debater_role == result.winner][0]
         st.success(f"🏆 **Winner: {result.winner.title()}** with score {winner_score:.1f}/10")
     else:
         st.info("⚖️ **Debate Result: TIE** - Both debaters presented equally compelling arguments")
 
+    # ... (Termination status same as before) ...
     # Termination status
     if result.termination:
         if result.termination.terminated and result.termination.reason != "completed":
@@ -134,7 +209,13 @@ def display_debate_result(result: DebateResult) -> None:
 
     st.divider()
 
-    # Argument history
+    # 3. Control Group Baseline Content
+    if result.baseline:
+        st.header("🧪 Control Group")
+        display_baseline(result.baseline)
+        st.divider()
+
+    # 4. Argument history
     st.header("📚 Argument History")
 
     # Organizer's overview
@@ -171,35 +252,39 @@ def display_debate_result(result: DebateResult) -> None:
             label="📋 Download as JSON",
             data=result.to_json(indent=2),
             file_name=f"debate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json"
+            mime="application/json",
         )
 
     with col2:
         # CSV export
         csv_data = []
         for arg in result.arguments:
-            csv_data.append({
-                "Round": arg.round_number,
-                "Participant": arg.participant_name,
-                "Role": arg.participant_role,
-                "Word Count": arg.word_count,
-                "Content": arg.content[:100] + "..."
-            })
+            csv_data.append(
+                {
+                    "Round": arg.round_number,
+                    "Participant": arg.participant_name,
+                    "Role": arg.participant_role,
+                    "Word Count": arg.word_count,
+                    "Content": arg.content[:100] + "...",
+                }
+            )
 
         import pandas as pd
+
         df = pd.DataFrame(csv_data)
 
         st.download_button(
             label="📊 Download as CSV",
             data=df.to_csv(index=False),
             file_name=f"debate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv"
+            mime="text/csv",
         )
 
 
 # ============================================================================
 # MAIN APPLICATION
 # ============================================================================
+
 
 def main():
     """Main application function."""
@@ -216,64 +301,42 @@ def main():
         st.header("⚙️ Debate Configuration")
 
         # Topic
-        topic = st.text_area(
-            "📌 Debate Topic",
-            height=100,
-            placeholder="Enter the topic for debate..."
-        )
+        topic = st.text_area("📌 Debate Topic", height=100, placeholder="Enter the topic for debate...")
 
         st.subheader("🤖 LLM Model Selection")
 
         organizer_model = st.text_input(
             "Organizer's Model",
             value="ollama/gemma3:latest",
-            help="Examples: gpt-4o, claude-3-opus-20240229, ollama/llama2"
+            help="Examples: gpt-4o, claude-3-opus-20240229, ollama/llama2",
         )
 
-        supporter_model = st.text_input(
-            "Supporter's Model",
-            value="ollama/gemma3:latest"
-        )
+        supporter_model = st.text_input("Supporter's Model", value="ollama/gemma3:latest")
 
         supporter_persona = st.text_area(
             "Supporter's Persona",
             value="An expert in the field with a positive outlook on the topic.",
-            help="Describe the expert perspective this debater should take."
+            help="Describe the expert perspective this debater should take.",
         )
 
-        opposer_model = st.text_input(
-            "Opposer's Model",
-            value="ollama/gemma3:latest"
-        )
+        opposer_model = st.text_input("Opposer's Model", value="ollama/gemma3:latest")
 
         opposer_persona = st.text_area(
             "Opposer's Persona",
             value="A critical analyst focusing on risks and potential downsides.",
-            help="Describe the expert perspective this debater should take."
+            help="Describe the expert perspective this debater should take.",
         )
 
-        judge_model = st.text_input(
-            "Judge's Model",
-            value="ollama/gemma3:latest"
-        )
+        judge_model = st.text_input("Judge's Model", value="ollama/gemma3:latest")
 
         st.subheader("📊 Debate Settings")
 
-        num_rounds = st.slider(
-            "Number of Rounds",
-            min_value=1,
-            max_value=10,
-            value=3
-        )
+        num_rounds = st.slider("Number of Rounds", min_value=1, max_value=10, value=3)
 
         st.divider()
 
         # Start debate button
-        start_button = st.button(
-            "🎬 Start Debate",
-            type="primary",
-            use_container_width=True
-        )
+        start_button = st.button("🎬 Start Debate", type="primary", use_container_width=True)
 
         if start_button:
             if not topic:
@@ -290,7 +353,7 @@ def main():
                     opposer_model=opposer_model,
                     opposer_persona=opposer_persona,
                     judge_model=judge_model,
-                    num_rounds=num_rounds
+                    num_rounds=num_rounds,
                 )
                 debate = DebateSession.from_config(config)
 
@@ -305,7 +368,8 @@ def main():
                     status_text.info("Generating organizer overview...")
                     progress_bar.progress(20)
 
-                    result = debate.run(num_rounds=num_rounds)
+                    # Use asyncio.run to execute the async debate.run() method
+                    result = asyncio.run(debate.run(num_rounds=num_rounds))
 
                     progress_bar.progress(100)
                     status_text.success("✅ Debate completed!")

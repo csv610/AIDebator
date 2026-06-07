@@ -1,15 +1,9 @@
 """Debater participant for debate platform."""
 
 import logging
-from typing import Dict, List, Optional, Tuple
 
+from ..models.entities import GapAnalysis, OpponentEvaluation, ReflectiveAnalysis, ValidationResult
 from .base import Participant
-from ..models.entities import (
-    GapAnalysis, 
-    ValidationResult, 
-    OpponentEvaluation,
-    ReflectiveAnalysis
-)
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +11,7 @@ logger = logging.getLogger(__name__)
 class Debater(Participant):
     """Presents arguments for or against the topic."""
 
-    def __init__(self, name: str, model: str, is_supporter: bool, persona: Optional[str] = None):
+    def __init__(self, name: str, model: str, is_supporter: bool, persona: str | None = None):
         """
         Initialize debater.
 
@@ -30,8 +24,8 @@ class Debater(Participant):
         super().__init__(name, model)
         self.is_supporter = is_supporter
         self.persona = persona or ("A supporter" if is_supporter else "An opposer")
-        self.argument_history: List[Dict] = []
-        self.opponent_argument_history: List[Dict] = []
+        self.argument_history: list[dict] = []
+        self.opponent_argument_history: list[dict] = []
 
     def get_role(self) -> str:
         """Return role."""
@@ -45,10 +39,7 @@ class Debater(Participant):
             argument: The argument text
             round_number: Round number
         """
-        self.argument_history.append({
-            "round": round_number,
-            "content": argument
-        })
+        self.argument_history.append({"round": round_number, "content": argument})
 
     def add_opponent_argument(self, argument: str, round_number: int) -> None:
         """
@@ -58,21 +49,18 @@ class Debater(Participant):
             argument: The opponent's argument text
             round_number: Round number
         """
-        self.opponent_argument_history.append({
-            "round": round_number,
-            "content": argument
-        })
+        self.opponent_argument_history.append({"round": round_number, "content": argument})
 
-    def generate_argument(
+    async def generate_argument(
         self,
         topic: str,
         round_number: int,
         is_initial: bool = False,
-        own_score: Optional[float] = None,
-        opponent_score: Optional[float] = None
+        own_score: float | None = None,
+        opponent_score: float | None = None,
     ) -> str:
         """
-        Generate an argument for the debate.
+        Generate an argument for the debate asynchronously.
 
         Args:
             topic: The debate topic
@@ -91,14 +79,8 @@ class Debater(Participant):
             history_context = ""
             score_context = ""
         else:
-            own_args_summary = self._build_history_summary(
-                self.argument_history,
-                "Your previous arguments"
-            )
-            opponent_args_summary = self._build_history_summary(
-                self.opponent_argument_history,
-                "Opponent's arguments"
-            )
+            own_args_summary = self._build_history_summary(self.argument_history, "Your previous arguments")
+            opponent_args_summary = self._build_history_summary(self.opponent_argument_history, "Opponent's arguments")
 
             history_context = f"""
 DEBATE HISTORY:
@@ -170,13 +152,13 @@ Response:"""
             f"{self.name} generating {'initial' if is_initial else 'rebuttal'} argument for round {round_number}"
             f" (own_score={own_score}, opponent_score={opponent_score})"
         )
-        
+
         # Step 1: Generate argument
-        content = self.generate_response(prompt, max_tokens=800)
-        
+        content = await self.generate_response(prompt, max_tokens=800)
+
         return content
 
-    def _build_history_summary(self, history: List[Dict], label: str) -> str:
+    def _build_history_summary(self, history: list[dict], label: str) -> str:
         """
         Build formatted summary of argument history.
 
@@ -197,9 +179,9 @@ Response:"""
 
         return summary
 
-    def analyze_opponent_arguments(self, topic: str, opponent_arguments: List[str]) -> List[str]:
+    async def analyze_opponent_arguments(self, topic: str, opponent_arguments: list[str]) -> list[str]:
         """
-        Analyze opponent's arguments and identify gaps.
+        Analyze opponent's arguments and identify gaps asynchronously.
 
         Args:
             topic: The debate topic
@@ -211,10 +193,7 @@ Response:"""
         if not opponent_arguments:
             return []
 
-        opponent_text = "\n".join([
-            f"Round {i+1}:\n{arg}\n"
-            for i, arg in enumerate(opponent_arguments)
-        ])
+        opponent_text = "\n".join([f"Round {i+1}:\n{arg}\n" for i, arg in enumerate(opponent_arguments)])
 
         prompt = f"""You are a critical debate analyst. Analyze the opponent's most recent argument(s) below and identify specific gaps, logical fallacies, unsupported claims, and inconsistencies.
 
@@ -237,7 +216,7 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
 Focus only on the latest argument's new weaknesses."""
 
         logger.debug(f"{self.name} analyzing opponent arguments")
-        response = self.generate_response(prompt, max_tokens=800, response_format=GapAnalysis, temperature=0.1)
+        response = await self.generate_response(prompt, max_tokens=800, response_format=GapAnalysis, temperature=0.1)
 
         try:
             analysis = GapAnalysis.model_validate_json(response)
@@ -246,9 +225,9 @@ Focus only on the latest argument's new weaknesses."""
             logger.warning(f"Failed to parse gap analysis for {self.name}: {str(e)}")
             return []
 
-    def validate_argument_quality(self, topic: str, current_argument: str) -> Tuple[bool, str]:
+    async def validate_argument_quality(self, topic: str, current_argument: str) -> tuple[bool, str]:
         """
-        Validate if argument provides new information AND/OR refutes opponent.
+        Validate if argument provides new information AND/OR refutes opponent asynchronously.
 
         Argument is valid if it:
         - Introduces new evidence, examples, or logical arguments, OR
@@ -298,7 +277,9 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
 Be objective and strict."""
 
         try:
-            response = self.generate_response(prompt, max_tokens=500, response_format=ValidationResult, temperature=0.1)
+            response = await self.generate_response(
+                prompt, max_tokens=500, response_format=ValidationResult, temperature=0.1
+            )
             validation = ValidationResult.model_validate_json(response)
 
             # Argument is valid if:
@@ -306,9 +287,9 @@ Be objective and strict."""
             # - Successfully refutes opponent AND has some new info OR
             # - Has new info that's not repetitive
             is_substantive = (
-                validation.has_strong_novelty or
-                (validation.refutes_opponent and validation.has_new_information) or
-                (validation.has_new_information and validation.avoids_repetition)
+                validation.has_strong_novelty
+                or (validation.refutes_opponent and validation.has_new_information)
+                or (validation.has_new_information and validation.avoids_repetition)
             )
 
             logger.info(f"{self.name} argument validation: {is_substantive} - {validation.reason}")
@@ -318,9 +299,9 @@ Be objective and strict."""
             logger.warning(f"Failed to parse validation for {self.name}: {str(e)}")
             return False, f"Validation parsing error: {str(e)}"
 
-    def evaluate_opponent_argument(self, topic: str, opponent_argument: str) -> Tuple[List[str], List[str]]:
+    async def evaluate_opponent_argument(self, topic: str, opponent_argument: str) -> tuple[list[str], list[str]]:
         """
-        Evaluate opponent's argument for valid points and weaknesses.
+        Evaluate opponent's argument for valid points and weaknesses asynchronously.
 
         This is crucial for dynamic scoring - debaters can acknowledge valid opponent
         points (increasing opponent score) or identify weaknesses (decreasing opponent score).
@@ -362,11 +343,13 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
 }}"""
 
         logger.debug(f"{self.name} evaluating opponent argument for valid points and weaknesses")
-        response = self.generate_response(prompt, max_tokens=800, response_format=OpponentEvaluation, temperature=0.1)
+        response = await self.generate_response(
+            prompt, max_tokens=800, response_format=OpponentEvaluation, temperature=0.1
+        )
 
         try:
             eval_result = OpponentEvaluation.model_validate_json(response)
-            
+
             # Filter and limit
             valid_points = [p for p in eval_result.acknowledged_valid_points if p.strip()][:3]
             weaknesses = [w for w in eval_result.identified_weaknesses if w.strip()][:3]
@@ -377,9 +360,9 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
             logger.warning(f"Failed to parse evaluation for {self.name}: {str(e)}")
             return [], []
 
-    def generate_summary(self, topic: str) -> str:
+    async def generate_summary(self, topic: str) -> str:
         """
-        Generate a final summary of the debater's performance and core arguments.
+        Generate a final summary of the debater's performance and core arguments asynchronously.
 
         Args:
             topic: The debate topic
@@ -388,7 +371,7 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
             Summary text
         """
         own_args = self._build_history_summary(self.argument_history, "Your arguments")
-        
+
         prompt = f"""You are a debate participant providing a final summary of your performance.
 
 Topic: {topic}
@@ -401,13 +384,13 @@ DEBATE HISTORY:
 Task: Provide a concise (max 200 words) summary of your main arguments, the evidence you presented, and your final stance. Highlight your strongest points.
 
 Summary:"""
-        
-        logger.info(f"{self.name} generating final summary")
-        return self.generate_response(prompt, max_tokens=400)
 
-    def generate_reflective_analysis(self, topic: str) -> ReflectiveAnalysis:
+        logger.info(f"{self.name} generating final summary")
+        return await self.generate_response(prompt, max_tokens=400)
+
+    async def generate_reflective_analysis(self, topic: str) -> ReflectiveAnalysis:
         """
-        Generate reflective analysis: learned from other, weaknesses, and corrections.
+        Generate reflective analysis asynchronously.
 
         Args:
             topic: The debate topic
@@ -438,13 +421,10 @@ Focus on being self-critical and objective."""
 
         logger.info(f"{self.name} generating reflective analysis")
         # Use lower temperature for structured output to ensure consistency
-        response = self.generate_response(
-            prompt, 
-            max_tokens=1200, 
-            response_format=ReflectiveAnalysis, 
-            temperature=0.1
+        response = await self.generate_response(
+            prompt, max_tokens=1200, response_format=ReflectiveAnalysis, temperature=0.1
         )
-        
+
         try:
             # Basic cleanup in case the model wraps in markdown despite response_format
             cleaned_response = response.strip()
@@ -452,16 +432,17 @@ Focus on being self-critical and objective."""
                 cleaned_response = cleaned_response.split("```json")[1].split("```")[0].strip()
             elif cleaned_response.startswith("```"):
                 cleaned_response = cleaned_response.split("```")[1].split("```")[0].strip()
-                
+
             return ReflectiveAnalysis.model_validate_json(cleaned_response)
         except Exception as e:
             logger.warning(f"Failed to parse reflective analysis for {self.name}: {str(e)}")
             # If it failed but we have some text, maybe try to find any JSON-like structure
             try:
                 import re
-                json_match = re.search(r'\{.*\}', cleaned_response, re.DOTALL)
+
+                json_match = re.search(r"\{.*\}", cleaned_response, re.DOTALL)
                 if json_match:
                     return ReflectiveAnalysis.model_validate_json(json_match.group())
-            except:
+            except Exception:
                 pass
             return ReflectiveAnalysis(learned=[], weaknesses=[], corrections=[])

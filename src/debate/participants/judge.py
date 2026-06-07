@@ -1,10 +1,8 @@
-"""Judge participant for debate platform."""
-
+import asyncio
 import logging
-from typing import List
 
-from .base import Participant
 from ..models.entities import Argument, Score
+from .base import Participant
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +24,42 @@ class Judge(Participant):
         """Return role."""
         return "judge"
 
-    def score_debate(self, topic: str, arguments: List[Argument]) -> List[Score]:
+    async def generate_baseline(self, topic: str) -> str:
         """
-        Score all arguments and provide feedback.
+        Generate a single-agent baseline analysis of the topic.
+        This serves as the 'Control Group' for scientific comparison.
+        """
+        prompt = f"""You are an objective expert analyst. Provide a comprehensive analysis of the following topic.
+Your analysis should cover both the supporting and opposing viewpoints in detail, provide evidence, and reach a balanced conclusion.
+
+Topic: {topic}
+
+The goal is to provide the best possible single-agent response without the benefit of a multi-agent debate.
+
+Analysis:"""
+
+        logger.info(f"{self.name} generating single-agent baseline analysis")
+        return await self.generate_response(prompt, max_tokens=1500)
+
+    async def evaluate_baseline_score(self, topic: str, content: str) -> Score:
+        """
+        Evaluate the baseline analysis using the exact same criteria as the debate.
+        """
+        # We reuse _get_base_score logic by creating a dummy Argument
+        dummy_arg = Argument(
+            round_number=1,
+            participant_name="Baseline",
+            participant_role="supporter",  # Role doesn't strictly matter for internal logic
+            content=content,
+            timestamp="",
+            word_count=self.count_words(content),
+        )
+
+        return await self._get_base_score(topic, "baseline", [dummy_arg])
+
+    async def score_debate(self, topic: str, arguments: list[Argument]) -> list[Score]:
+        """
+        Score all arguments and provide feedback asynchronously.
 
         Scoring includes:
         1. Base scoring on 4 criteria
@@ -42,7 +73,6 @@ class Judge(Participant):
         Returns:
             List of Score objects for each debater
         """
-        scores = []
         debater_arguments = {}
 
         # Group arguments by role (supporter/opposer)
@@ -52,28 +82,32 @@ class Judge(Participant):
                     debater_arguments[arg.participant_role] = []
                 debater_arguments[arg.participant_role].append(arg)
 
-        # Score each debater
+        # Create tasks for each debater to score in parallel
+        tasks = []
+        roles = []
         for debater_role, arguments_list in debater_arguments.items():
-            try:
-                # 1. Get base score from LLM
-                score_data = self._get_base_score(topic, debater_role, arguments_list)
-                
+            roles.append(debater_role)
+            tasks.append(self._get_base_score(topic, debater_role, arguments_list))
+
+        # Execute all scoring tasks in parallel
+        base_scores = await asyncio.gather(*tasks, return_exceptions=True)
+
+        final_scores = []
+        for i, score_data in enumerate(base_scores):
+            debater_role = roles[i]
+            if isinstance(score_data, Exception):
+                logger.warning(f"Failed to score {debater_role}: {str(score_data)}")
+                final_scores.append(self._get_error_score(debater_role))
+            else:
                 # 2. Apply dynamic adjustments based on debate dynamics
                 score = self._apply_dynamic_adjustments(score_data, debater_role, arguments)
-                scores.append(score)
-                
-            except Exception as e:
-                logger.warning(f"Failed to score {debater_role}: {str(e)}")
-                scores.append(self._get_error_score(debater_role))
+                final_scores.append(score)
 
-        return scores
+        return final_scores
 
-    def _get_base_score(self, topic: str, debater_role: str, arguments_list: List[Argument]) -> Score:
-        """Request base score evaluation from LLM."""
-        arguments_text = "\n".join([
-            f"Round {arg.round_number}:\n{arg.content}"
-            for arg in arguments_list
-        ])
+    async def _get_base_score(self, topic: str, debater_role: str, arguments_list: list[Argument]) -> Score:
+        """Request base score evaluation from LLM asynchronously."""
+        arguments_text = "\n".join([f"Round {arg.round_number}:\n{arg.content}" for arg in arguments_list])
 
         prompt = f"""You are an expert debate judge evaluating arguments in an academic debate.
 
@@ -126,10 +160,10 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
 }}"""
 
         logger.info(f"{self.name} evaluating base score for {debater_role}")
-        response = self.generate_response(prompt, max_tokens=500, response_format=Score)
+        response = await self.generate_response(prompt, max_tokens=500, response_format=Score)
         return Score.model_validate_json(response)
 
-    def _apply_dynamic_adjustments(self, base_score: Score, debater_role: str, all_arguments: List[Argument]) -> Score:
+    def _apply_dynamic_adjustments(self, base_score: Score, debater_role: str, all_arguments: list[Argument]) -> Score:
         """Apply bonuses and penalties based on acknowledgments and identified weaknesses."""
         overall_score = base_score.overall_score
         valid_points_acknowledged = 0
@@ -149,27 +183,24 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
 
         # Apply adjustments
         bonus = valid_points_acknowledged * 0.15  # +0.15 per valid point acknowledged
-        penalty = weaknesses_identified * 0.10    # -0.10 per weakness identified
+        penalty = weaknesses_identified * 0.10  # -0.10 per weakness identified
 
         adjusted_score = min(10.0, max(0.0, overall_score + bonus - penalty))
-        
+
         logger.info(
             f"{debater_role}: base={overall_score:.1f}, bonus={bonus:.1f}, penalty={penalty:.1f}, final={adjusted_score:.1f}"
         )
 
         feedback = base_score.feedback
         if bonus > 0 or penalty > 0:
-            feedback += f"\n\nDYNAMIC SCORING ADJUSTMENTS:"
+            feedback += "\n\nDYNAMIC SCORING ADJUSTMENTS:"
             if valid_points_acknowledged > 0:
                 feedback += f"\n+ Opponent acknowledged {valid_points_acknowledged} valid point(s) in your argument: +{bonus:.1f} points"
             if weaknesses_identified > 0:
                 feedback += f"\n- Opponent identified {weaknesses_identified} weakness/weaknesses in your argument: -{penalty:.1f} points"
 
         # Update and return a new Score object with adjusted values
-        return base_score.model_copy(update={
-            "overall_score": adjusted_score,
-            "feedback": feedback
-        })
+        return base_score.model_copy(update={"overall_score": adjusted_score, "feedback": feedback})
 
     def _get_error_score(self, debater_role: str) -> Score:
         """Return a default score in case of evaluation failure."""
@@ -182,5 +213,5 @@ Return ONLY a valid JSON object (no markdown, no extra text) with this exact str
             overall_score=0,
             feedback="Error during evaluation process.",
             fact_count=0,
-            irrefutable_arguments=0
+            irrefutable_arguments=0,
         )

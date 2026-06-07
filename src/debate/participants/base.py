@@ -3,7 +3,8 @@
 import logging
 from abc import ABC, abstractmethod
 
-from litellm import completion
+import litellm
+from litellm import acompletion
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +28,15 @@ class Participant(ABC):
         """Return participant's role."""
         pass
 
-    def generate_response(self, prompt: str, max_tokens: int = 1000, response_format: type = None, temperature: float = 0.7) -> str:
+    async def generate_response(
+        self,
+        prompt: str,
+        max_tokens: int = 1000,
+        response_format: type = None,
+        temperature: float = 0.7,
+    ) -> str:
         """
-        Generate response using litellm.
+        Generate response using litellm asynchronously.
 
         Args:
             prompt: The prompt to send to the model
@@ -45,25 +52,26 @@ class Participant(ABC):
         """
         try:
             logger.debug(f"Generating response for {self.name} using {self.model}")
-            
+
             kwargs = {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": max_tokens,
-                "temperature": temperature
+                "temperature": temperature,
             }
-            
+
             if response_format:
                 try:
                     kwargs["response_format"] = response_format
-                    response = completion(**kwargs)
-                except Exception as e:
-                    if "UnsupportedParamsError" in str(e) or "response_format" in str(e):
-                        logger.warning(f"Model {self.model} does not support response_format. Falling back to text response.")
-                    else:
-                        raise e
+                    response = await acompletion(**kwargs)
+                except (litellm.UnsupportedParamsError, litellm.NotFoundError):
+                    logger.warning(
+                        f"Model {self.model} does not support response_format. Falling back to text response."
+                    )
+                    del kwargs["response_format"]
+                    response = await acompletion(**kwargs)
             else:
-                response = completion(**kwargs)
+                response = await acompletion(**kwargs)
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"Error generating response for {self.name}: {str(e)}")

@@ -14,9 +14,9 @@ class Organizer(Participant):
         """Return role."""
         return "organizer"
 
-    def generate_overview(self, topic: str) -> str:
+    async def generate_overview(self, topic: str) -> str:
         """
-        Generate neutral overview of the topic (200-300 words).
+        Generate neutral overview of the topic (200-300 words) asynchronously.
 
         Args:
             topic: The debate topic
@@ -38,5 +38,5 @@ Your overview should:
 Overview:"""
 
         logger.info(f"{self.name} generating overview for topic: {topic[:50]}...")
-        response = self.generate_response(prompt, max_tokens=500)
+        response = await self.generate_response(prompt, max_tokens=500)
         return response

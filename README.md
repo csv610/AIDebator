@@ -88,7 +88,7 @@ The platform implements the following logic:
 ```bash
 git clone https://github.com/csv610/AIDebator.git
 cd AIDebator
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### Configuration
@@ -111,7 +111,7 @@ streamlit run app.py
 
 **Command Line**
 ```bash
-python debate_cli.py --topic "Subject" --rounds 3
+aidebator --topic "Subject" --rounds 3
 ```
 
 **Python API**

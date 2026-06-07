@@ -61,28 +61,7 @@
 
 ---
 
-### 📊 PROJECT_SUMMARY.md (460 lines)
-**Purpose**: High-level project summary and metrics
-**Contents**:
-- Project overview and version info
-- Key achievements vs requirements
-- Project structure overview
-- Architecture highlights
-- Core features description
-- Usage patterns
-- Technology decisions and rationale
-- Quality metrics
-- Performance analysis
-- Extensibility discussion
-- Comparison with original version
-- Getting started quick reference
-- Known limitations
-- Future enhancements
-- Project statistics and success criteria
 
-**Read this** for a comprehensive overview of what was built and why.
-
----
 
 ### 📋 INDEX.md (this file)
 **Purpose**: Complete file index and navigation guide
@@ -244,7 +223,6 @@ AIDebator/
 │   ├── README.md              - Project overview
 │   ├── ARCHITECTURE.md        - Technical details
 │   ├── QUICKSTART.md          - Getting started
-│   ├── PROJECT_SUMMARY.md     - Project metrics
 │   └── INDEX.md               - File navigation
 │
 ├── 📂 src/debate/    - CORE ENGINE ⭐
@@ -270,8 +248,7 @@ AIDebator/
 
 ### I want to understand the project
 1. Start with README.md (5 min)
-2. Read PROJECT_SUMMARY.md (10 min)
-3. Browse ARCHITECTURE.md (15 min)
+2. Browse ARCHITECTURE.md (15 min)
 
 ### I want to run the application
 1. Read QUICKSTART.md (10 min)
@@ -360,7 +337,7 @@ AIDebator/
 - ...understand the project? → README.md
 - ...set up quickly? → QUICKSTART.md
 - ...dig into architecture? → ARCHITECTURE.md
-- ...see metrics/status? → PROJECT_SUMMARY.md
+- ...see architecture details? → ARCHITECTURE.md
 - ...navigate files? → INDEX.md (you are here)
 - ...use core engine? → `src/debate/`
 - ...build UI? → app.py

@@ -1,29 +1,14 @@
-"""
-Command-line interface for running debates without Streamlit.
-
-This module provides a simple CLI to run debates using the core debate engine
-(src.debate) without any dependency on Streamlit or other UI frameworks.
-
-Usage:
-    python debate_cli.py --topic "AI will improve employment" --rounds 3
-    python debate_cli.py --config debate_config.json
-    python debate_cli.py --topic "..." --organizer-model gpt-4 --supporter-model gpt-3.5-turbo
-"""
-
 import argparse
+import asyncio
 import json
 import sys
-from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
-from src.debate import (
-    Organizer,
-    Debater,
-    Judge,
-    DebateSession,
-    DebateResult,
-    DebateConfig
-)
+from dotenv import load_dotenv
+
+from src.debate import DebateConfig, DebateResult, DebateSession
+
+load_dotenv()
 
 
 # ============================================================================
@@ -31,29 +16,18 @@ from src.debate import (
 # ============================================================================
 
 DEFAULT_CONFIG = {
-    "organizer": {
-        "name": "Moderator",
-        "model": "ollama/gemma3"
-    },
-    "supporter": {
-        "name": "Debater A",
-        "model": "ollama/gemma3"
-    },
-    "opposer": {
-        "name": "Debater B",
-        "model": "ollama/gemma3"
-    },
-    "judge": {
-        "name": "Judge",
-        "model": "ollama/gemma3"
-    },
-    "num_rounds": 3
+    "organizer": {"name": "Moderator", "model": "ollama/gemma3"},
+    "supporter": {"name": "Debater A", "model": "ollama/gemma3"},
+    "opposer": {"name": "Debater B", "model": "ollama/gemma3"},
+    "judge": {"name": "Judge", "model": "ollama/gemma3"},
+    "num_rounds": 3,
 }
 
 
 # ============================================================================
 # CLI FUNCTIONS
 # ============================================================================
+
 
 def print_header(text: str) -> None:
     """Print formatted header."""
@@ -76,7 +50,7 @@ def print_argument(argument) -> None:
     print(f"  {'-'*76}")
     print(f"  {argument.content}")
     if argument.gaps_identified:
-        print(f"\n  🎯 Gaps Identified:")
+        print("\n  🎯 Gaps Identified:")
         for gap in argument.gaps_identified[:3]:
             print(f"     • {gap}")
     print()
@@ -92,56 +66,98 @@ def print_score(score) -> None:
     print(f"  Responsiveness to Gaps: {score.responsiveness_to_gaps:5.1f}/10")
     print(f"  {'─'*76}")
     print(f"  OVERALL SCORE:          {score.overall_score:5.1f}/10")
-    print(f"\n  📈 Evidence Metrics:")
+    print("\n  📈 Evidence Metrics:")
     print(f"     • Facts & Citations:          {score.fact_count}")
     print(f"     • Evidence-Backed Arguments:  {score.irrefutable_arguments}")
-    print(f"\n  Detailed Feedback:")
-    for line in score.feedback.split('\n'):
+    print("\n  Detailed Feedback:")
+    for line in score.feedback.split("\n"):
         if line.strip():
             print(f"    {line}")
+
+
+def print_baseline(baseline) -> None:
+    """Print single-agent baseline."""
+    print("▶ SINGLE-AGENT CONTROL GROUP ANALYSIS")
+    print(f"  Words: {len(baseline.content.split())}")
+    print(f"  {'-'*76}")
+    print(f"  {baseline.content[:500]}...")
+    print(f"\n  📊 Baseline Score: {baseline.score.overall_score:.1f}/10")
+    print(f"     (Evidence: {baseline.score.evidence_quality:.1f}, Logic: {baseline.score.logical_consistency:.1f})")
+
+
+def print_comparison(result: DebateResult) -> None:
+    """Print scientific comparison between baseline and debate."""
+    if not result.baseline:
+        return
+
+    # Find the winning score (or highest score)
+    best_score = max([s.overall_score for s in result.scores])
+    baseline_score = result.baseline.score.overall_score
+    delta = best_score - baseline_score
+
+    # Calculate evidence density improvement
+    total_debate_facts = sum([s.fact_count for s in result.scores])
+    baseline_facts = result.baseline.score.fact_count
+
+    print_header("SCIENTIFIC IMPACT ANALYSIS")
+
+    print("📈 REASONING IMPROVEMENT")
+    print(f"   • Single-Agent Baseline Score: {baseline_score:.1f}/10")
+    print(f"   • Multi-Agent Debate Score:   {best_score:.1f}/10")
+    status = "IMPROVEMENT" if delta > 0 else "DECLINE"
+    print(f"   • Reasoning Delta:            {delta:+.1f} points ({status})")
+
+    print("\n📚 EVIDENCE DENSITY")
+    print(f"   • Baseline Fact Count:        {baseline_facts}")
+    print(f"   • Debate Total Fact Count:    {total_debate_facts}")
+    if baseline_facts > 0:
+        increase = ((total_debate_facts - baseline_facts) / baseline_facts) * 100
+        print(f"   • Evidence Volume Increase:   {increase:+.1f}%")
+
+    print(f"\n🔍 VERDICT: {'Debate yielded superior reasoning' if delta > 0 else 'Single-agent was sufficient'}")
 
 
 def print_reflection(name: str, summary: str, reflection) -> None:
     """Print participant summary and reflection."""
     print(f"\n👤 Participant: {name}")
     print(f"  {'─'*76}")
-    print(f"  📝 FINAL SUMMARY:")
-    for line in summary.split('\n'):
+    print("  📝 FINAL SUMMARY:")
+    for line in summary.split("\n"):
         if line.strip():
             print(f"    {line}")
-    
+
     if reflection:
-        print(f"\n  🧠 REFLECTIVE ANALYSIS:")
-        
+        print("\n  🧠 REFLECTIVE ANALYSIS:")
+
         # Learned
-        print(f"     💡 Learned from opponent:")
+        print("     💡 Learned from opponent:")
         if reflection.learned:
             for item in reflection.learned:
                 print(f"        • {item}")
         else:
-            print(f"        (No specific learning points identified)")
-        
+            print("        (No specific learning points identified)")
+
         # Weaknesses
-        print(f"\n     📉 Self-identified weaknesses:")
+        print("\n     📉 Self-identified weaknesses:")
         if reflection.weaknesses:
             for item in reflection.weaknesses:
                 print(f"        • {item}")
         else:
-            print(f"        (No weaknesses identified)")
-        
+            print("        (No weaknesses identified)")
+
         # Corrections
-        print(f"\n     🛠️  Corrections made:")
+        print("\n     🛠️  Corrections made:")
         if reflection.corrections:
             for item in reflection.corrections:
                 print(f"        • {item}")
         else:
-            print(f"        (No corrections needed)")
+            print("        (No corrections needed)")
 
 
-def load_config(config_path: str) -> Dict[str, Any]:
+def load_config(config_path: str) -> dict[str, Any]:
     """Load configuration from JSON file."""
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             return json.load(f)
     except FileNotFoundError:
         print(f"❌ Error: Configuration file not found: {config_path}")
@@ -151,15 +167,15 @@ def load_config(config_path: str) -> Dict[str, Any]:
         sys.exit(1)
 
 
-def save_config(config: Dict[str, Any], output_path: str) -> None:
+def save_config(config: dict[str, Any], output_path: str) -> None:
     """Save configuration to JSON file."""
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         json.dump(config, f, indent=2)
     print(f"✅ Configuration saved to {output_path}")
 
 
-def run_debate_from_args(args) -> DebateResult:
-    """Run debate using command-line arguments."""
+async def run_debate_from_args(args) -> DebateResult:
+    """Run debate using command-line arguments asynchronously."""
 
     # Load or build configuration dictionary
     if args.config:
@@ -175,13 +191,13 @@ def run_debate_from_args(args) -> DebateResult:
             "opposer_model": args.opposer_model or DEFAULT_CONFIG["opposer"]["model"],
             "opposer_persona": args.opposer_persona,
             "judge_model": args.judge_model or DEFAULT_CONFIG["judge"]["model"],
-            "num_rounds": args.rounds or DEFAULT_CONFIG["num_rounds"]
+            "num_rounds": args.rounds or DEFAULT_CONFIG["num_rounds"],
         }
 
     try:
         # Validate using Pydantic
         config = DebateConfig.model_validate(config_dict)
-        
+
         # Create and run debate
         print_header(f"STARTING DEBATE: {config.topic}")
 
@@ -193,7 +209,7 @@ def run_debate_from_args(args) -> DebateResult:
         print(f"\nRounds: {config.num_rounds}")
 
         debate = DebateSession.from_config(config)
-        result = debate.run(num_rounds=config.num_rounds)
+        result = await debate.run(num_rounds=config.num_rounds)
         return result
     except Exception as e:
         print(f"\n❌ Error: {str(e)}")
@@ -202,6 +218,11 @@ def run_debate_from_args(args) -> DebateResult:
 
 def display_result(result: DebateResult) -> None:
     """Display debate result in terminal."""
+
+    # Baseline (Control Group)
+    if result.baseline:
+        print_section("Control Group: Single-Agent Baseline")
+        print_baseline(result.baseline)
 
     # Organizer overview
     print_section("Round 0: Topic Overview")
@@ -257,11 +278,20 @@ def display_result(result: DebateResult) -> None:
             print()
             print(f"✅  DEBATE STATUS: Completed successfully ({result.num_rounds} rounds)")
 
+    # Final Scientific Comparison
+    if result.baseline:
+        print_comparison(result)
+
     print()
 
 
 def main():
-    """Main CLI entry point."""
+    """Sync CLI entry point (wraps async main)."""
+    asyncio.run(_async_main())
+
+
+async def _async_main():
+    """Async CLI entry point."""
 
     parser = argparse.ArgumentParser(
         description="Run AI debates from command line",
@@ -288,73 +318,31 @@ Examples:
 
   # Run and save result
   python debate_cli.py --topic "..." --save-result debate_result.json
-        """
+        """,
     )
 
     # Configuration
-    parser.add_argument(
-        "--config",
-        help="Load debate configuration from JSON file"
-    )
-    parser.add_argument(
-        "--save-config",
-        help="Save debate configuration to JSON file"
-    )
+    parser.add_argument("--config", help="Load debate configuration from JSON file")
+    parser.add_argument("--save-config", help="Save debate configuration to JSON file")
 
     # Debate parameters
-    parser.add_argument(
-        "--topic",
-        help="Debate topic"
-    )
-    parser.add_argument(
-        "--rounds",
-        type=int,
-        help="Number of debate rounds (1-10)"
-    )
+    parser.add_argument("--topic", help="Debate topic")
+    parser.add_argument("--rounds", type=int, help="Number of debate rounds (1-10)")
 
     # Model selection
-    parser.add_argument(
-        "--organizer-model",
-        help="Model for organizer (e.g., gpt-4)"
-    )
-    parser.add_argument(
-        "--supporter-model",
-        help="Model for supporter (e.g., gpt-3.5-turbo)"
-    )
-    parser.add_argument(
-        "--supporter-persona",
-        help="Expert persona for the supporter"
-    )
-    parser.add_argument(
-        "--opposer-model",
-        help="Model for opposer (e.g., claude-3-opus-20240229)"
-    )
-    parser.add_argument(
-        "--opposer-persona",
-        help="Expert persona for the opposer"
-    )
-    parser.add_argument(
-        "--judge-model",
-        help="Model for judge (e.g., gpt-4)"
-    )
+    parser.add_argument("--organizer-model", help="Model for organizer (e.g., gpt-4)")
+    parser.add_argument("--supporter-model", help="Model for supporter (e.g., gpt-3.5-turbo)")
+    parser.add_argument("--supporter-persona", help="Expert persona for the supporter")
+    parser.add_argument("--opposer-model", help="Model for opposer (e.g., claude-3-opus-20240229)")
+    parser.add_argument("--opposer-persona", help="Expert persona for the opposer")
+    parser.add_argument("--judge-model", help="Model for judge (e.g., gpt-4)")
 
     # Output options
-    parser.add_argument(
-        "--save-result",
-        help="Save debate result to JSON file"
-    )
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Don't display result in terminal"
-    )
+    parser.add_argument("--save-result", help="Save debate result to JSON file")
+    parser.add_argument("--quiet", action="store_true", help="Don't display result in terminal")
 
     # Help
-    parser.add_argument(
-        "--example",
-        action="store_true",
-        help="Show example configuration"
-    )
+    parser.add_argument("--example", action="store_true", help="Show example configuration")
 
     args = parser.parse_args()
 
@@ -366,7 +354,7 @@ Examples:
         return
 
     # Run debate
-    result = run_debate_from_args(args)
+    result = await run_debate_from_args(args)
 
     # Save configuration if requested
     if args.save_config:
